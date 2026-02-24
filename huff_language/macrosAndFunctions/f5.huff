@@ -1,0 +1,79 @@
+// Define the contract's interface
+#define function addWord(uint256) pure returns (uint256)
+
+// Get a free storage slot to store the owner
+#define constant OWNER = FREE_STORAGE_POINTER()
+
+// Define the event we wish to emit
+#define event WordAdded(uint256 initial, uint256 increment)
+
+// Macro to emit an event that a word has been added
+#define macro emitWordAdded(increment) = takes (1) returns (0) {
+    // input stack: [initial]
+    <increment>              // [increment, initial]
+    __EVENT_HASH(WordAdded)  // [sig, increment, initial]
+    0x00 0x00                // [mem_start, mem_end, sig, increment, initial]
+    log3                     // []
+}
+
+// Only owner function modifier
+#define macro ONLY_OWNER() = takes (0) returns (0) {
+    caller                   // [msg.sender]
+    [OWNER] sload            // [owner, msg.sender]
+    eq                       // [owner == msg.sender]
+    is_owner jumpi           // []
+
+    // Revert if the sender is not the owner
+    0x00 0x00 revert
+
+    is_owner:
+}
+
+// Add a word (32 bytes) to a uint 
+#define macro ADD_WORD() = takes(1) returns(1) {
+    // Input Stack:          // [input_num]
+
+    // Enforce that the caller is the owner. The code of the
+    // `ONLY_OWNER` macro will be pasted at this invocation. 
+    ONLY_OWNER()
+
+    // Call our helper macro that emits an event when a word is added
+    // Here we pass a literal that represents how much we increment the word by.
+    // NOTE: We need to duplicate the input number on our stack since
+    //       emitWordAdded takes 1 stack item and returns 0
+    dup1                     // [input_num, input_num]
+    emitWordAdded(0x20)      // [input_num]
+
+    // NOTE: 0x20 is automatically pushed to the stack, it is assumed to be a 
+    // literal by the compiler.
+    0x20                     // [0x20, input_num]
+    add                      // [0x20 + input_num]
+
+    // Return stack:            [0x20 + input_num]
+}
+
+#define macro MAIN() = takes (0) returns (0) {
+    // Get the function signature from the calldata
+    0x00 calldataload        // [calldata @ 0x00]
+    0xE0 shr                 // [func_sig (calldata @ 0x00 >> 0xE0)]
+
+    // Check if the function signature in the calldata is
+    // a match to our `addWord` function definition.
+    // More about the `__FUNC_SIG` builtin in the `Builtin Functions`
+    // section.
+    __FUNC_SIG(addWord)      // [func_sig(addWord), func_sig]
+    eq                       // [func_sig(addWord) == func_sig]
+    add_word jumpi           // []
+
+    // Revert if no function signature matched
+    0x00 0x00 revert
+
+    // Create a jump label
+    add_word:
+        // Call the `ADD_WORD` macro with the first calldata
+        // input, store the result in memory, and return it.
+        0x04 calldataload    // [input_num]
+        ADD_WORD()           // [result]
+        0x00 mstore          // []
+        0x20 0x00 return
+}

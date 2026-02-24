@@ -1,0 +1,11 @@
+#define macro MUL_OP(a, b) = takes(0) returns(1) {
+    <a> <b> mul
+}
+
+#define macro COMPUTE(fn, x, y) = takes(0) returns(1) {
+    <fn>(<x>, <y>) // Invoke macro with arguments
+}
+
+#define macro MAIN() = takes(0) returns(0) {
+    COMPUTE(MUL_OP, 0x05, 0x06) // Expands to: 0x05 0x06 mul
+}

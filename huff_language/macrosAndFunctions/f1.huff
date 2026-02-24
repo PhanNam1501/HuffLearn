@@ -1,0 +1,13 @@
+#define macro ADD_OP() = takes(2) returns(1) {
+    add
+}
+
+#define macro APPLY_OP(operation) = takes(0) returns(1) {
+    0x10
+    0x20
+    <operation>() // Invoke the macro passed as argument
+}
+
+#define macro MAIN() = takes(0) returns(0) {
+    APPLY_OP(ADD_OP)
+}

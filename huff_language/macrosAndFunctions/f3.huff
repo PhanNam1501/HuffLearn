@@ -1,0 +1,13 @@
+#define macro CALC(val1, val2, op) = takes(0) returns(1) {
+    <val1>
+    <val2>
+    <op>
+}
+
+#define macro WRAPPER(fn, num) = takes(0) returns(1) {
+    <fn>(0x10, <num>, add)
+}
+
+#define macro MAIN() = takes(0) returns(0) {
+    WRAPPER(CALC, 0x20)
+}

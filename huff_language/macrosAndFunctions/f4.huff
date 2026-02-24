@@ -1,0 +1,11 @@
+#define macro DOUBLE(x) = takes(0) returns(1) {
+    <x> 0x02 mul
+}
+
+#define macro PROCESS(fn, arg) = takes(0) returns(1) {
+    <fn>(<arg>)
+}
+
+#define macro MAIN() = takes(0) returns(0) {
+    PROCESS(DOUBLE, 0x05)
+}
