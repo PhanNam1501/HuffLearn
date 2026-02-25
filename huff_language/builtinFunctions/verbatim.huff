@@ -1,0 +1,146 @@
+// ============================================
+// __VERBATIM - Chèn raw bytes vào bytecode
+// ============================================
+
+#define function run() nonpayable returns()
+#define function test() nonpayable returns()
+
+#define event Transfer(address indexed from, address indexed to, uint256 amount)
+#define error Unauthorized()
+
+// ============================================
+// 1. Direct hex literal
+// ============================================
+
+#define macro RAW_OPCODES() = takes(0) returns(0) {
+    // Chèn raw opcode trực tiếp
+    // 0x00 = STOP opcode
+    // 0x60 0x00 = PUSH1 0x00
+    // 0x01 = ADD
+
+    // Ví dụ: push 5, push 3, add
+    // PUSH1 0x05 = 0x6005
+    // PUSH1 0x03 = 0x6003
+    // ADD        = 0x01
+    __VERBATIM(0x6005600301)
+    // Bytecode: 60 05 60 03 01
+    // Tương đương viết:
+    //   0x05 0x03 add
+    // Stack: [8]
+
+    0x00 mstore
+    0x20 0x00 return
+}
+
+// ============================================
+// 2. Constant reference
+// ============================================
+
+#define constant MY_SIG = __FUNC_SIG("transfer(address,uint256)")
+// MY_SIG = 0xa9059cbb (4 bytes)
+
+#define macro USE_CONSTANT() = takes(0) returns(0) {
+    // Bình thường: [MY_SIG] => PUSH4 0xa9059cbb (5 bytes trong bytecode)
+    // __VERBATIM([MY_SIG]) => chỉ raw 0xa9059cbb (4 bytes, KHÔNG có PUSH4)
+
+    __VERBATIM([MY_SIG])
+    // Bytecode: a9 05 9c bb
+    // ⚠️ EVM sẽ interpret từng byte như opcode, KHÔNG phải push lên stack!
+    // a9 = invalid opcode
+    // Đây là raw data, không phải instruction
+}
+
+// ============================================
+// 3. Nested builtin - So sánh có và không có __VERBATIM
+// ============================================
+
+#define macro COMPARE_VERBATIM() = takes(0) returns(0) {
+    // ═══════ __FUNC_SIG ═══════
+
+    // Không có VERBATIM: PUSH4 + selector = 5 bytes
+    // __FUNC_SIG("withdraw(uint256)")
+    // Bytecode: 63 2e1a7d4d    (63 = PUSH4)
+
+    // Có VERBATIM: chỉ selector = 4 bytes
+    // __VERBATIM(__FUNC_SIG("withdraw(uint256)"))
+    // Bytecode: 2e 1a 7d 4d    (raw bytes, không có PUSH4)
+
+
+    // ═══════ __EVENT_HASH ═══════
+
+    // Không có VERBATIM: PUSH32 + 32 bytes hash = 33 bytes
+    // __EVENT_HASH(Transfer)
+    // Bytecode: 7f ddf252ad...f523b3ef   (7f = PUSH32)
+
+    // Có VERBATIM: chỉ 32 bytes hash
+    // __VERBATIM(__EVENT_HASH(Transfer))
+    // Bytecode: dd f2 52 ad ... f5 23 b3 ef   (raw 32 bytes)
+
+
+    // ═══════ __ERROR ═══════
+
+    // Không có VERBATIM: PUSH32 + left-padded selector = 33 bytes
+    // __ERROR(Unauthorized)
+    // Bytecode: 7f 000...{selector}
+
+    // Có VERBATIM: chỉ raw 32 bytes
+    // __VERBATIM(__ERROR(Unauthorized))
+    // Bytecode: 00 00 ... {selector}   (32 bytes raw)
+
+
+    // ═══════ __RIGHTPAD ═══════
+
+    // Không có VERBATIM: PUSH32 + 32 bytes = 33 bytes
+    // __RIGHTPAD(0x1234)
+    // Bytecode: 7f 12340000...000
+
+    // Có VERBATIM: chỉ 32 bytes
+    // __VERBATIM(__RIGHTPAD(0x1234))
+    // Bytecode: 12 34 00 00 ... 00   (32 bytes raw)
+
+    stop
+}
+
+// ============================================
+// 5. Use case: Tạo custom PUSH instruction
+// ============================================
+
+#define macro CUSTOM_PUSH() = takes(0) returns(0) {
+    // PUSH1 = 0x60
+    // Muốn push giá trị 0x42 lên stack bằng raw opcode:
+
+    __VERBATIM(0x6042)
+    // Bytecode: 60 42
+    // EVM: PUSH1 0x42
+    // Stack: [0x42]
+
+    // PUSH2 = 0x61
+    // Push 0x1234:
+    __VERBATIM(0x611234)
+    // Bytecode: 61 12 34
+    // EVM: PUSH2 0x1234
+    // Stack: [0x1234, 0x42]
+
+    // Tương đương:
+    // 0x42
+    // 0x1234
+
+    pop pop stop
+}
+
+// ============================================
+// MAIN
+// ============================================
+#define macro MAIN() = takes(0) returns(0) {
+    0x00 calldataload 0xE0 shr
+
+    dup1 __FUNC_SIG(run)  eq run_jump  jumpi
+    dup1 __FUNC_SIG(test) eq test_jump jumpi
+
+    0x00 0x00 revert
+
+    run_jump:
+        RAW_OPCODES()
+    test_jump:
+        CUSTOM_PUSH()
+}

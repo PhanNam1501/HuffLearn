@@ -1,0 +1,117 @@
+// ============================================
+// __ASSERT_PC — Compile-time assertion
+// Không sinh bytecode, chỉ kiểm tra vị trí PC khi compile
+// ============================================
+
+// ============================================
+// 1. Ví dụ cơ bản — đếm bytecode position
+// ============================================
+
+#define macro BASIC_ASSERT() = takes(0) returns(0) {
+    __ASSERT_PC(0x00)       // PC = 0, chưa có gì
+
+    0x01                    // PUSH1 0x01 = 2 bytes (opcode 60 + value 01)
+    __ASSERT_PC(0x02)       // PC = 2 ✅
+
+    0x02                    // PUSH1 0x02 = 2 bytes
+    __ASSERT_PC(0x04)       // PC = 4 ✅
+
+    add                     // ADD = 1 byte
+    __ASSERT_PC(0x05)       // PC = 5 ✅
+
+    stop                    // STOP = 1 byte
+    __ASSERT_PC(0x06)       // PC = 6 ✅
+}
+
+// Bytecode:
+// Pos: 0  1  2  3  4  5
+//      60 01 60 02 01 00
+//      │  │  │  │  │  │
+//      │  │  │  │  │  └─ STOP
+//      │  │  │  │  └──── ADD
+//      │  │  │  └─────── value 0x02
+//      │  │  └────────── PUSH1
+//      │  └───────────── value 0x01
+//      └──────────────── PUSH1
+//
+// __ASSERT_PC không sinh byte nào!
+
+
+// ============================================
+// 2. Kiểm tra label position
+// ============================================
+
+#define macro CHECK_LABEL() = takes(0) returns(0) {
+    __ASSERT_PC(0x00)
+
+    0x05                    // PUSH1 0x05 = 2 bytes
+    __ASSERT_PC(0x02)
+
+    target jump             // PUSH2 target + JUMP = 3 + 1 = 4 bytes
+    __ASSERT_PC(0x06)       // (tùy compiler, có thể khác)
+
+    target:                 // JUMPDEST = 1 byte
+    __ASSERT_PC(0x07)
+
+    stop
+}
+
+// ============================================
+// 3. Use case thực tế — Đảm bảo jump destination đúng vị trí
+// ============================================
+
+#define constant EXPECTED_HANDLER_POS = 0x20
+
+#define macro PADDED_DISPATCH() = takes(0) returns(0) {
+    // Đọc selector
+    0x00 calldataload 0xE0 shr    // 5 bytes (60 00 35 60 E0 1C) = khoảng 6 bytes
+
+    // Padding bằng STOP để handler nằm đúng vị trí mong muốn
+    // Giả sử cần pad tới offset 0x20
+    stop stop stop stop stop
+    stop stop stop stop stop
+    stop stop stop stop stop
+    stop stop stop stop stop
+    stop stop stop stop stop
+
+    // Assert handler nằm đúng vị trí
+    __ASSERT_PC([EXPECTED_HANDLER_POS])
+
+    handler:
+        0x01 0x00 mstore
+        0x20 0x00 return
+}
+
+// ============================================
+// 4. Kết hợp với for-loop
+// ============================================
+
+#define constant TARGET = 0x10
+
+#define macro ALIGNED_CODE() = takes(0) returns(0) {
+    // Fill 16 bytes bằng STOP
+    for (i in 0..[TARGET]) {
+        stop                // 16 lần stop = 16 bytes
+    }
+
+    // Đảm bảo đúng vị trí
+    __ASSERT_PC([TARGET])   // PC = 0x10 = 16 ✅
+
+    critical_section:       // JUMPDEST tại byte 16
+    __ASSERT_PC(0x11)       // 16 + 1 (JUMPDEST) = 17 = 0x11
+
+    0x42 0x00 mstore
+    0x20 0x00 return
+}
+
+#define macro MAIN() = takes(0) returns(0) {
+    __ASSERT_PC(0x00)       // Luôn bắt đầu từ 0
+
+    0x00 calldataload       // 5F 35 = 2 bytes (PUSH0 + CALLDATALOAD)
+    __ASSERT_PC(0x02)
+
+    0xE0 shr                // 60 E0 1C = 3 bytes (PUSH1 0xE0 + SHR)
+    __ASSERT_PC(0x05)
+
+    stop
+}

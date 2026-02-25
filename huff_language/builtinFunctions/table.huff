@@ -1,0 +1,75 @@
+// Table chứa 4 giá trị, mỗi entry 32 bytes
+#define table SCORES {
+    0x000000000000000000000000000000000000000000000000000000000000000A  // index 0 = 10
+    0x0000000000000000000000000000000000000000000000000000000000000014  // index 1 = 20
+    0x000000000000000000000000000000000000000000000000000000000000001E  // index 2 = 30
+    0x0000000000000000000000000000000000000000000000000000000000000028  // index 3 = 40
+}
+
+
+#define function getScore(uint256) view returns(uint256)
+#define function getTableSize() view returns(uint256)
+
+#define macro GET_SCORE() = takes(0) returns(0) {
+    // Input: index (0-3) từ calldata
+
+    // Bước 1: Đọc index
+    0x04 calldataload                       // [index]
+
+    // Bước 2: Tính offset trong table (mỗi entry 32 bytes)
+    0x02 mul                                // [index * 32]
+
+    // Bước 3: Cộng với vị trí bắt đầu của table trong bytecode
+    __tablestart(SCORES)                  // [table_start, index * 32]
+    add                                   // [table_start + index * 32] -> [position]
+    // Đây là vị trí chính xác của entry trong bytecode
+
+    // Bước 4: codecopy vào memory
+    // codecopy(destOffset, offset, size)
+    0x20                                  // [32, position]
+    swap1                                 // [position, 32]
+    0x00                                  // [0, position, 32]
+    codecopy                              // memory[0x00] = table[index]
+
+    0x20 0x00 return
+}
+
+// Ví dụ: getScore(2)
+//
+// index = 2
+// offset trong table = 2 * 32 = 64
+// vị trí trong bytecode = __tablestart(SCORES) + 64
+//
+// codecopy(0x00, vị_trí, 32)
+// memory[0x00] = 0x...001E = 30
+//
+// Bytecode:
+// ┌────────────┬──────────────────────────────────┐
+// │ MAIN code  │ 000...00A 000...014 000...01E 000...028 │
+// │            │ entry[0]  entry[1]  entry[2]  entry[3]  │
+// │            ▲                     ▲                    │
+// │   __tablestart          tablestart + 64               │
+// └────────────┴──────────────────────────────────┘
+
+
+#define macro GET_TABLE_SIZE() = takes(0) returns(0) {
+    // __tablesize trả về tổng bytes
+    // 4 entries × 32 bytes = 128 bytes
+    __tablesize(SCORES)         //[123]
+    0x00 mstore
+    0x20 0x00 return
+}
+
+#define macro MAIN() = takes(0) returns(0) {
+    0x00 calldataload 0xE0 shr
+
+    dup1 __FUNC_SIG(getScore)     eq score_jump jumpi
+    dup1 __FUNC_SIG(getTableSize) eq size_jump  jumpi
+
+    0x00 0x00 revert
+
+    score_jump:
+        GET_SCORE()
+    size_jump:
+        GET_TABLE_SIZE()
+}

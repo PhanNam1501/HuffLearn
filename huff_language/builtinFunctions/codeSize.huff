@@ -1,0 +1,77 @@
+#define function getSize() nonpayable returns(uint256)
+#define function run() nonpayable returns()
+
+// ============================================
+// Các macro để demo __codesize
+// ============================================
+
+#define macro SIMPLE_ADD() = takes(2) returns(1) {
+    add
+}
+
+#define macro MULTIPLY() = takes(1) returns(1) {
+    0x02 mul
+}
+
+#define macro COMPLEX_LOGIC() = takes(0) returns(0) {
+    0x04 calldataload
+    0x00 mstore
+    0x20 0x00 return
+}
+
+// ============================================
+// Sử dụng __codesize
+// ============================================
+
+#define macro GET_SIZE() = takes(0) returns(0) {
+    // __codesize trả về kích thước bytecode của macro
+
+    // Macro nhỏ: chỉ 1 opcode (add)
+    __codesize(SIMPLE_ADD)                // [1] (1 byte)
+
+    // Macro lớn hơn: PUSH1 0x02 + mul = 3 bytes
+    __codesize(MULTIPLY)                  // [3, 1]
+
+    // Macro phức tạp
+    __codesize(COMPLEX_LOGIC)             // [size, 3, 1]
+
+    // Return size của COMPLEX_LOGIC
+    0x00 mstore
+    0x20 0x00 return
+}
+
+#define macro RUN() = takes(0) returns(0) {
+    // Use case: biết size để tính gas hoặc làm điều kiện
+
+    __codesize(COMPLEX_LOGIC)             // [size]
+    0x0A                                  // [10, size]
+    gt                                    // [size > 10]
+
+    is_big jumpi
+
+    // Macro nhỏ => chạy logic A
+    0x01 0x00 mstore
+    0x20 0x00 return
+
+    is_big:
+    // Macro lớn => chạy logic B
+    0x02 0x00 mstore
+    0x20 0x00 return
+}
+
+// ============================================
+// MAIN
+// ============================================
+#define macro MAIN() = takes(0) returns(0) {
+    0x00 calldataload 0xE0 shr
+
+    dup1 __FUNC_SIG(getSize) eq size_jump jumpi
+    dup1 __FUNC_SIG(run)     eq run_jump  jumpi
+
+    0x00 0x00 revert
+
+    size_jump:
+        GET_SIZE()
+    run_jump:
+        RUN()
+}

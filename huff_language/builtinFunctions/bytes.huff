@@ -1,0 +1,169 @@
+// ============================================
+// String Constants
+// ============================================
+#define constant NAME = "Ferra"
+#define constant SYMBOL = "FER"
+#define constant ERR_UNAUTHORIZED = "Unauthorized"
+#define constant ERR_ZERO_ADDR = "Zero address"
+
+// Pre-computed bytes constant
+#define constant NAME_BYTES = __BYTES([NAME])
+
+// ============================================
+// Function Definitions
+// ============================================
+#define function name() view returns(string)
+#define function symbol() view returns(string)
+#define function greet() view returns(string)
+#define function onlyOwner() nonpayable returns()
+
+#define constant OWNER_SLOT = 0x00
+
+// ============================================
+// 1. Return string "Ferra" — dùng __BYTES trực tiếp
+// ============================================
+#define macro GET_NAME() = takes(0) returns(0) {
+    // ABI encode string:
+    // offset (0x20) + length + data (right-padded)
+    //
+    // memory layout:
+    // [0x00] 0x0000...0020        ← offset trỏ tới string data
+    // [0x20] 0x0000...0005        ← string length = 5
+    // [0x40] 0x46657272610000...  ← "Ferra" right-padded
+
+    // Offset
+    0x20 0x00 mstore                //memory[0x00] = 0x20
+
+    // Legnth
+    0x05 0x20 mstore                //memory[0x20] = 5
+
+    // Data — dùng __BYTES
+    __BYTES("Ferra")                // [0x4665727261] (5 bytes)
+    // Cần right-pad để lưu vào memory 32 bytes
+    // "Ferra" = 5 bytes, shift left (32-5)*8 = 216 bits
+    0xD8 shl                        // [0x46657272610000...000]
+    0x40 mstore                     // memory[0x40] = "Ferra" padded
+
+    0x60 0x00 return
+}
+
+// ============================================
+// 2. Return string "FER" — dùng constant reference
+// ============================================
+#define macro GET_SYMBOL() = takes(0) returns(0) {
+    0x20 0x00 mstore                    // memory[0x00] = 0x20 --- offset
+    0x03 0x20 mstore                    // memory[0x20] = 3 --- length
+    __BYTES([SYMBOL])                   // [0x464552] (3 bytes)
+    // Shift left (32-3)*8 = 232 bits = 0xE8
+    0xE8 shl                            // [0x4645520000...000]
+    0x40 mstore
+
+    0x60 0x00 return
+}
+
+// ============================================
+// 3. Dùng pre-computed constant
+// ============================================
+#define macro GET_NAME_V2() = takes(0) returns(0) {
+    0x20 0x00 mstore
+    0x05 0x20 mstore
+
+    // Dùng pre-computed bytes constant
+    [NAME_BYTES]                          // [0x4665727261]
+    0xD8 shl
+    0x40 mstore
+
+    0x60 0x00 return
+}
+
+
+// ============================================
+// 4. Custom revert message
+// ============================================
+#define macro ONLY_OWNER() = takes(0) returns(0) {
+    caller
+    [OWNER_SLOT] sload
+    eq is_owner jumpi
+
+    // Revert với string "Unauthorized"
+    // Giống Solidity: require(msg.sender == owner, "Unauthorized")
+    //
+    // ABI encode Error(string):
+    // memory layout (revert bắt đầu từ 0x1C):
+    //
+    // [0x1C] 08 c3 79 a0                ← Error(string) selector (4 bytes)
+    // [0x20] 0x0000...0020              ← offset tới string data
+    // [0x40] 0x0000...000c              ← length = 12
+    // [0x60] "Unauthorized" padded      ← data
+
+    // Error(string) selector
+    // 0x08c379a0 = 4 bytes, mstore tại 0x00 → nằm ở byte 0x1C..0x1F
+    0x08c379a0
+    0x00 mstore                           // memory[0x00..0x1F] = ...08c379a0
+
+    // Offset
+    0x20 0x20 mstore                      // memory[0x20..0x3F] = 0x20
+
+    // Length: "Unauthorized" = 12 chars
+    0x0c 0x40 mstore                      // memory[0x40..0x5F] = 12
+
+    // Data
+    __BYTES([ERR_UNAUTHORIZED])           // [0x556e617574686f72697a6564] (12 bytes)
+    0xA0 shl                              // shift left 160 bits → right-padded 32 bytes
+    0x60 mstore                           // memory[0x60..0x7F] = "Unauthorized" padded
+
+    // revert(offset, size)
+    // offset = 0x1C (bắt đầu từ selector)
+    // size = 4 + 32 + 32 + 32 = 100 = 0x64
+    0x64 0x1c revert
+
+    is_owner:
+}
+
+// ============================================
+// 5. So sánh string
+// ============================================
+#define macro CHECK_GREETING() = takes(0) returns(0) {
+    // Đọc 5 bytes đầu từ calldata[4] và so sánh với "hello"
+    0x04 calldataload                     // [calldata_word]
+
+    // Lấy 5 bytes đầu (shift right 216 bits)
+    0xD8 shr                              // [first_5_bytes]
+
+    // So sánh với "hello"
+    __BYTES("hello")                      // [0x68656c6c6f, first_5_bytes]
+    eq                                    // [match?]
+
+    is_hello jumpi
+
+    // Không match
+    0x00 0x00 mstore
+    0x20 0x00 return
+
+    is_hello:
+    0x01 0x00 mstore
+    0x20 0x00 return
+}
+
+// ============================================
+// MAIN
+// ============================================
+#define macro MAIN() = takes(0) returns(0) {
+    0x00 calldataload 0xE0 shr
+
+    dup1 __FUNC_SIG(name)      eq name_jump   jumpi
+    dup1 __FUNC_SIG(symbol)    eq symbol_jump  jumpi
+    dup1 __FUNC_SIG(greet)     eq greet_jump   jumpi
+    dup1 __FUNC_SIG(onlyOwner) eq owner_jump   jumpi
+
+    0x00 0x00 revert
+
+    name_jump:
+        GET_NAME()
+    symbol_jump:
+        GET_SYMBOL()
+    greet_jump:
+        CHECK_GREETING()
+    owner_jump:
+        ONLY_OWNER()
+}

@@ -1,0 +1,122 @@
+#define macro RUNTIME() = takes(0) returns(0) {
+    0x04 calldataload                     // [value]
+    0x00 sstore                           // storage[0x00] = value
+    stop
+}
+
+#define macro CONSTRUCTOR() = takes(0) returns(0) {
+    __codesize(RUNTIME)                   // [runtime_size]
+    dup1                                  // [runtime_size, runtime_size]
+    __codeoffset(RUNTIME)                 // [runtime_offset, runtime_size, runtime_size]
+    0x00                                  // [0, runtime_offset, runtime_size, runtime_size]
+    codecopy                              // Stack: [runtime_size]
+    0x00                                  // [0, runtime_size]
+    return
+}
+```
+
+### EVM deploy hoạt động thế nào?
+
+Khi deploy contract, EVM chạy **creation code** (constructor). Cái mà constructor `return` chính là **runtime code** — bytecode được lưu on-chain vĩnh viễn.
+```
+┌─────────────────────────────────────────────┐
+│           FULL BYTECODE (khi deploy)        │
+│                                             │
+│  ┌──────────────┐  ┌────────────────────┐   │
+│  │ CONSTRUCTOR  │  │  RUNTIME (MAIN)    │   │
+│  │ (creation)   │  │  (on-chain code)   │   │
+│  │              │  │                    │   │
+│  │ Chạy 1 lần  │  │  Chạy mỗi lần     │   │
+│  │ khi deploy   │  │  gọi contract     │   │
+│  └──────────────┘  └────────────────────┘   │
+│                    ▲                        │
+│                    │                        │
+│         __codeoffset(RUNTIME) trỏ tới đây   │
+│         __codesize(RUNTIME) = kích thước    │
+└─────────────────────────────────────────────┘
+
+// Bước 1: Lấy size runtime code
+__codesize(RUNTIME)                   // [runtime_size]
+// Giả sử RUNTIME compile ra 7 bytes
+// Stack: [7]
+
+// Bước 2: Duplicate vì cần size 2 lần (codecopy + return)
+dup1                                  // [7, 7]
+
+// Bước 3: Lấy vị trí runtime code trong toàn bộ bytecode
+__codeoffset(RUNTIME)                 // [offset, 7, 7]
+// Giả sử constructor chiếm 12 bytes => runtime bắt đầu tại byte 12
+// Stack: [12, 7, 7]
+
+// Bước 4: destOffset = 0 (copy vào đầu memory)
+0x00                                  // [0, 12, 7, 7]
+
+// Bước 5: codecopy(destOffset, offset, size)
+// => Copy 7 bytes từ vị trí 12 trong bytecode vào memory[0x00]
+codecopy                              // Stack: [7]
+//
+// Memory sau codecopy:
+// ┌────────────────────────────────┐
+// │ 0x00: [runtime bytecode, 7B]  │
+// │ 0x07: [0x00...]               │
+// └────────────────────────────────┘
+
+// Bước 6: Return runtime code cho EVM lưu on-chain
+0x00                                  // [0, 7]
+return                                // return(offset=0, size=7)
+// EVM nhận được 7 bytes => lưu làm contract code
+
+
+EVM pop từ top stack xuống theo thứ tự:
+pop 1 (top) → value
+pop 2       → offset
+pop 3       → size
+Nên phải push ngược lại: size trước, offset giữa, value cuối (nằm trên top).
+Push order:        Stack sau khi push xong:
+
+push size    →     [size]
+push offset  →     [offset, size]
+push value   →     [value, offset, size]
+                     ↑ top
+                     
+EVM pop:  value=0, offset=0, size=10 ✅
+
+// ═══════ PHASE 1: Copy bytecode vào memory ═══════
+
+__codesize(COMPLEX_LOGIC)             // [10]
+__codeoffset(COMPLEX_LOGIC)           // [30, 10]
+0x00                                  // [0, 30, 10]
+codecopy                              // codecopy(destOffset=0, offset=30, size=10)
+                                      // Stack: []
+// Memory:
+// ┌──────────────────────────────────────┐
+// │ 0x00: [COMPLEX_LOGIC bytecode, 10B] │
+// └──────────────────────────────────────┘
+
+
+// ═══════ PHASE 2: Deploy contract mới ═══════
+
+// create(value, offset, size)
+// Push ngược: size → offset → value
+
+__codesize(COMPLEX_LOGIC)             // [10]          ← size
+0x00                                  // [0, 10]       ← offset
+0x00                                  // [0, 0, 10]    ← value (top)
+                                      //  ↑ EVM đọc đầu tiên
+
+create
+// EVM pop: value=0, offset=0, size=10
+// → Lấy memory[0..10], chạy như creation code
+// → Return: [new_address] hoặc [0] nếu fail
+```
+
+### Tóm lại
+```
+create(value, offset, size)
+
+value  = bao nhiêu ETH gửi cho contract mới
+offset = đọc creation code từ memory vị trí nào
+size   = bao nhiêu bytes
+
+Push lên stack: size → offset → value (top)
+EVM pop từ top: value → offset → size

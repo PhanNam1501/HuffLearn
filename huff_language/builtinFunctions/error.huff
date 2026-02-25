@@ -1,0 +1,141 @@
+// ============================================
+// Error Definitions
+// ============================================
+#define error InsufficientBalance(uint256 available, uint256 required)
+#define error Unauthorized()
+#define error ZeroAddress()
+#define error TransferFailed(address to, uint256 amount)
+
+// ============================================
+// Event & Function Definitions
+// ============================================
+#define event Transfer(address indexed from, address indexed to, uint256 amount)
+#define function transfer(address,uint256) nonpayable returns(bool)
+#define function withdraw(uint256) nonpayable returns()
+
+// ============================================
+// Storage
+// ============================================
+#define constant OWNER_SLOT = 0x00
+#define constant BALANCE_SLOT = 0x01
+
+// ============================================
+// Macros
+// ============================================
+
+// Revert với Unauthorized()
+// Error selector = keccak256("Unauthorized()")[0:4]
+// Không có params => chỉ cần 4 bytes
+#define macro ONLY_OWNER() = takes(0) returns(0) {
+    caller                  //[msg.sender]
+    [OWNER_SLOT] sload      //[owner, msg.sender]
+    eq                      //[owner == msg.sender]
+    authorized jumpi        
+
+    // Revert: Unauthorized()
+    __ERROR(Unauthorized)       // [0x00000000000000000000000000000000000000000000000000000000{selector}]
+    0x00 mstore                 // memory[0x00] = left-padded selector
+    0x04 0x1c revert            // revert(offset=28, size=4)
+                                // 28 = 32 - 4, vì selector nằm ở 4 bytes cuối của word
+    authorized:
+}
+
+// Revert với ZeroAddress()
+#define macro REQUIRE_NON_ZERO(dest) = takes(1) returns(1) {
+    //[address]
+    dup1                        //[address, address]
+    iszero                      //[address == 0, address]
+    iszero                      //[address != 0, address]
+    <dest> jumpi                //nếu != 0 => jump, giữ address trên stack
+
+    // Revert: ZeroAddress()
+    __ERROR(ZeroAddress)        //[left-padded selector]
+    0x00 mstore                 //memory[0x00] = selector
+    0x04 0x1c revert                      // revert 4 bytes từ offset 28
+}
+
+// Revert với InsufficientBalance(available, required)
+#define macro TRANSFER() = takes(0) returns(0) {
+    // Đọc calldata: transfer(address to, uint256 amount)
+    0x04 calldataload           //[to]
+    0x24 calldataload           //[amount, to]
+
+    // Kiểm tra zero address
+    swap1                       //[to, amount]
+    dup1                        //[to, to, amount]
+    continue_transfer jumpi     //to != 0 => continue 
+
+    // Revert: ZeroAddress()
+    __ERROR(ZeroAddress)
+    0x00 mstore
+    0x04 0x1c revert
+
+    continue_transfer:
+        // Stack: [to, amount]
+
+        // Giả sử load balance của sender
+        // (đơn giản hóa: dùng slot cố định)
+        [BALANCE_SLOT] sload            //[balance, to, amount]
+
+        // Kiểm tra balance >= amount
+        dup1                            //[balance, balance, to, amount]
+        dup4                            //[amount, balance, balance, to, amount]
+        gt                              //[amount > balance, balance, to, amount]
+        iszero                          //[amount <= balance, balance, to, amount]
+        has_enough jumpi                // if enough -> skip
+
+        // Revert: InsufficientBalance(available, required)
+        // ABI encode: selector + available + required
+
+        __ERROR(InsufficientBalance)    // [left-padded selector]
+        0x00 mstore                     // memory[0x00..0x20] = selector (4 bytes cuối)
+        // balance vẫn còn trên stack: [balance, to, amount]
+        dup1                            // [balance, balance, to, amount]
+        0x20 mstore                     //  memory[0x20] = available (balance)
+        dup3                            // [amount, balance, to]
+        0x40 mstore                     //  memory[0x40] = required (amount)
+        0x44 0x1c revert                // revert(28, 68)
+                                        // 68 = 4 (selector) + 32 (available) + 32 (required)
+    has_enough:
+        // Stack: [balance, to, amount]
+
+        // ... transfer logic ...
+
+        // Emit Transfer(from, to, amount)
+        dup3                                  // [amount, balance, to, amount]
+        0x00 mstore                           // memory[0x00] = amount
+        0x20 0x00                             // [offset, size]
+        __EVENT_HASH(Transfer)                // [topic0, offset, size]
+        caller                                // [from, topic0, offset, size]
+        dup5                                  // [to, from, topic0, offset, size]
+        log3
+    // Return true
+    0x01 0x00 mstore
+    0x20 0x00 return
+}
+
+#define macro WITHDRAW() = takes(0) returns(0) {
+    // Chỉ owner mới được withdraw
+    ONLY_OWNER()
+
+    // ... withdraw logic ...
+
+    stop
+}
+
+// ============================================
+// MAIN - Entry Point
+// ============================================
+#define macro MAIN() = takes(0) returns(0) {
+    0x00 calldataload 0xE0 shr            // [selector]
+
+    dup1 __FUNC_SIG(transfer) eq transfer_jump jumpi
+    dup1 __FUNC_SIG(withdraw) eq withdraw_jump jumpi
+
+    0x00 0x00 revert
+
+    transfer_jump:
+        TRANSFER()
+    withdraw_jump:
+        WITHDRAW()
+}

@@ -1,0 +1,19 @@
+#define function transfer(address,uint256) nonpayable returns()
+
+#define macro PUSH_VALUE(val) = takes(0) returns(1) {
+    <val>
+}
+
+
+#define macro MAIN() = takes(0) returns(0) {
+    // Pass builtin function call as macro argument
+    PUSH_VALUE(__FUNC_SIG(transfer))
+
+    // Pass padded builtin as argument
+    PUSH_VALUE(__RIGHTPAD(0x1234))
+
+    // Pass bytes as argument
+    PUSH_VALUE(__BYTES("test"))
+
+    pop pop pop
+}
