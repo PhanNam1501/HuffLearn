@@ -1,0 +1,74 @@
+#define constant ARRAY_LENGTH = 32
+
+#define macro COPY_ARRAY() = takes(2) returns(0) {
+    for(offset in 0..[ARRAY_LENGTH] step 0x20) {
+        dup2            // [src, dest, src]
+        <offset> add    // [src+offset, dest, src]
+        mload           // [value_offset, dest, src]
+        dup2            // [dest, value_offset, dest, src]
+        <offset> add    // [dest+offset, value_offset, dest, src]
+        mstore          // [dest, offset] -> write value_offset to dest_offset
+    }
+    pop pop
+}
+
+#define macro COPY_STORAGE_ARRAY() = takes(2) returns(0) {
+    // Stack: [dest_slot, src_slot]
+
+    // 1. Đọc length từ src_slot
+    dup1 sload            // [len, dest_slot, src_slot]
+
+    // 2. Ghi length vào dest_slot
+    dup1 dup3 sstore      // [len, dest_slot, src_slot]
+
+    // 3. Tính base slot cho src: keccak256(src_slot)
+    dup3 0x00 mstore
+    0x20 0x00 sha3        // [src_base, len, dest_slot, src_slot]
+
+    // 4. Tính base slot cho dest: keccak256(dest_slot)
+    dup3 0x00 mstore
+    0x20 0x00 sha3        // [dest_base, src_base, len, dest_slot, src_slot]
+
+    // Stack entering loop: [dest_base, src_base, len, dest_slot, src_slot]
+
+    copy_loop:
+        dup3                      // [len, dest_base, src_base, len, dest_slot, src_slot]
+        iszero                    // [len==0, dest_base, src_base, len, dest_slot, src_slot]
+        done jumpi                // [dest_base, src_base, len, dest_slot, src_slot]
+
+        // --- load from src, store to dest ---
+        dup2                      // [src_base, dest_base, src_base, len, dest_slot, src_slot]
+        sload                     // [value, dest_base, src_base, len, dest_slot, src_slot]
+        dup2                      // [dest_base, value, dest_base, src_base, len, dest_slot, src_slot]
+        sstore                    // [dest_base, src_base, len, dest_slot, src_slot]
+                                //  ^ sstore(dest_base, value) → ghi value vào dest_base
+
+        // --- src_base += 1 ---
+        swap1                     // [src_base, dest_base, len, dest_slot, src_slot]
+        0x01 add                  // [src_base+1, dest_base, len, dest_slot, src_slot]
+        swap1                     // [dest_base, src_base+1, len, dest_slot, src_slot]
+
+        // --- dest_base += 1 ---
+        0x01 add                  // [dest_base+1, src_base+1, len, dest_slot, src_slot]
+
+        // --- len -= 1 ---
+        swap2                     // [len, src_base+1, dest_base+1, dest_slot, src_slot]
+        0x01 swap1 sub            // [len-1, src_base+1, dest_base+1, dest_slot, src_slot]
+        swap2                     // [dest_base+1, src_base+1, len-1, dest_slot, src_slot]
+
+        copy_loop jump
+
+    done:
+        pop pop pop pop pop       // clean stack
+}
+```
+
+Flow:
+```
+Storage layout:
+
+src (slot 2):                    dest (slot 5):
+  slot 2: length = 3               slot 5: length = 3  ← copy
+  slot keccak(2)+0: elem_0         slot keccak(5)+0: elem_0  ← copy
+  slot keccak(2)+1: elem_1         slot keccak(5)+1: elem_1  ← copy
+  slot keccak(2)+2: elem_2         slot keccak(5)+2: elem_2  ← copy

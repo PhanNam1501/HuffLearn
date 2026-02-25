@@ -1,0 +1,12 @@
+#define macro OPTIONAL_LOG(value, should_log) = takes(0) returns(0) {
+    <should_log>  // Expands to opcodes or __NOOP
+    <value>
+}
+
+#define macro MAIN() = takes(0) returns(0) {
+    // With logging
+    OPTIONAL_LOG(0xff, log0)  // Generates: LOG0 PUSH1 0xff
+
+    // Without logging
+    OPTIONAL_LOG(0xff, __NOOP)  // Generates: PUSH1 0xff
+}

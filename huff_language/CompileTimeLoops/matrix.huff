@@ -1,0 +1,13 @@
+#define constant MATRIX_SIZE = 4
+
+#define macro INIT_MATRIX() = takes(0) returns(0) {
+    for (row in 0..[MATRIX_SIZE]) {
+        for (col in 0..[MATRIX_SIZE]) {
+            0x00
+            <row>
+            <col>
+            add
+            sstore
+        }
+    }
+}
