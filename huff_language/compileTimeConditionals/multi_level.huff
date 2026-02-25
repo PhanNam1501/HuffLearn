@@ -1,0 +1,12 @@
+#define constant ENC = 0x01
+
+#define macro MAIN() = takes(0) returns(0) {
+    if ([ENV] == 0x01) {
+        STRICT_VALIDATE()
+    } else if ([ENV] == 0x02) {
+        MEDIUM_VALIDATE()
+    } else {
+        DEBUG_LOG()
+    }
+    CORE_LOGIC()
+}

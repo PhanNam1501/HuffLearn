@@ -1,0 +1,16 @@
+#define constant SIZE = 0x04
+
+#define macro PROCESS() = takes(0) returns(0) {
+    if ([SIZE] <= 0x04) {
+        // Unroll small loops
+        PROCESS_ITEM(0x00)
+        PROCESS_ITEM(0x01)
+        PROCESS_ITEM(0x02)
+        PROCESS_ITEM(0x03)
+    } else {
+        // Use runtime loop for larger sizes
+        for(i in 0..[SIZE]) {
+            PROCESS_ITEM(<i>)
+        }
+    }
+}

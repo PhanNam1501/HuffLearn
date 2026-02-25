@@ -1,0 +1,12 @@
+#define constant VALUE = 0x02
+
+#define macro MAIN() = takes(0) returns(0) {
+    if ([VALUE] == 0x01) {
+        0x11
+    } else if ([VALUE] == 0x02) {
+        0x22
+    } else {
+        0x33
+    }
+    // Expands to: 0x22
+}

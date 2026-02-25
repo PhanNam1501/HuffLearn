@@ -1,0 +1,6 @@
+#define constant ENABLED = 0x01
+#define macro MAIN() = takes(0) returns(0) {
+    if ([ENABLED]) {
+        0x42 0x00 mstore
+    }
+}
