@@ -1,0 +1,17 @@
+#define macro USE_LABEL(lbl) = takes(0) returns(0) {
+    <lbl> jump
+}
+
+#define macro INNER() = takes(0) returns(0) {
+    target:
+    0x01
+    USE_LABEL(target)
+}
+
+#define macro MAIN() = takes(0) returns(0) {
+    target:
+    0x00
+    INNER()
+    USE_LABEL(target)
+}
+

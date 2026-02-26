@@ -1,0 +1,11 @@
+#define error PanicError(uint256)
+#define error Error(string)
+
+#define macro PACNIC() = takes (1) returns (0) {
+    // Input stack:                [panic_code]
+    __ERROR(PanicError)         // [panic_error_selector, panic_code]
+    0x00 mstore                 // [panic_code]
+    0x04 mstore                 // []
+    0x24 0x00 revert
+}
+

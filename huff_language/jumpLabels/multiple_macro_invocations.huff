@@ -1,0 +1,10 @@
+#define macro DEF_LBL() = takes(0) returns(0) {
+    my_label:
+    0x42
+    my_label
+}
+
+#define macro MAIN() = takes(0) returns(0) {
+    DEF_LBL()
+    DEF_LBL()
+}

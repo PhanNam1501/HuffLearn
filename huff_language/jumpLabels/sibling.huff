@@ -1,0 +1,13 @@
+#define macro FIRST() = takes(0) returns(0) {
+    first_label:
+    0x01
+}
+
+#define macro SECOND() = takes(0) returns(0) {
+    first_label jump // Can reference sibling's label
+}
+
+#define macro MAIN() = takes(0) returns(0) {
+    FIRST()         // Defines first_label
+    SECOND()        // References first_label from FIRST
+}

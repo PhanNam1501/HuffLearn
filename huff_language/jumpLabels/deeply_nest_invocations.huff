@@ -1,0 +1,17 @@
+#define macro DEEP_USE(label) = takes(0) returns(0) {
+    <label> jump
+}
+
+#define macro LEVEL2(lbl) = takes(0) returns(0) {
+    DEEP_USE(<lbl>)
+}
+
+#define macro lEVEL1(l) = takes(0) returns(0) {
+    LEVEL2(<l>)
+}
+
+#define macro MAIN() = takes(0) returns(0) {
+    target:
+    0x42
+    lEVEL1(target)
+}

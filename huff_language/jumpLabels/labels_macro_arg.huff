@@ -1,0 +1,17 @@
+#define macro SET_LABEL() = takes(0) returns(0) {
+    my_label:
+    0x42
+}
+
+#define macro USE_LABEL(lbl) = takes(0) returns(0) {
+    <lbl> jump
+}
+
+#define macro WRAPPER(m) = takes(0) returns(0) {
+    USE_LABEL(<m>)
+}
+
+#define macro MAIN() = takes(0) returns(0) {
+    SET_LABEL()         // Define my_label in SET_LABEL's scope
+    WRAPPER(my_label)   // Pass label through nested invocations
+}

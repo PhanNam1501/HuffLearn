@@ -1,0 +1,16 @@
+#Define a code table
+#define table CODE_TABLE1 {
+    0x604260005260206000F3
+}
+
+#define macro MAIN() = takes(0) returns(0) {
+    __tablesize(CODE_TABLE1)
+    __tablestart(CODE_TABLE1)
+    0x00
+    codecopy
+}
+
+#Usage of a builtin function
+#define table CODE_TABLE {
+    
+}

@@ -1,0 +1,12 @@
+#define macro INNER() = takes(0) returns(0) {
+    my_label:
+    0x01
+    my_label
+}
+
+#define macro MAIN() = takes(0) returns(0) {
+    my_label:       
+    0x00
+    INNER()
+    my_label
+}

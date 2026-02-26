@@ -1,0 +1,13 @@
+#define macro INNER() = takes(0) returns(0) {
+    inner_label:    // Label defined in nested macro
+    0x42
+}
+
+#define macro OUTER() = takes(0) returns(0) {
+    INNER()         // Invoke macro that defines inner_label
+}
+
+#define macro MAIN() = takes(0) returns(0) {
+    OUTER()
+    inner_label jump // Parent can jump to label in nested child
+}

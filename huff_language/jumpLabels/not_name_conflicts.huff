@@ -1,0 +1,12 @@
+#define macro PROCESS() = takes(0) returns(0) {
+    loop:
+    0x01 add
+    dup1 0x10 lt
+    loop jumpi
+}
+
+#define macro MAIN() = takes(0) returns(0) {
+    loop:
+    PROCESS()
+    loop jump
+}
